@@ -1,4 +1,4 @@
-﻿var appInsights = window.appInsights || (function(aiConfig) {
+﻿var appInsights = window.appInsights || (function (aiConfig) {
     var appInsights = {
         config: aiConfig
     };
@@ -13,25 +13,26 @@
     var track = "Track";
     var trackEvent = track + "Event";
     var trackPage = track + "Page";
-    var scriptElement = localDocument.createElement(scriptText);
-    scriptElement.src = aiConfig.url || "CDN_PATH";
-    localDocument.getElementsByTagName(scriptText)[0].parentNode.appendChild(scriptElement);
+    setTimeout(function () {
+        var scriptElement = localDocument.createElement(scriptText);
+        scriptElement.src = aiConfig.url || "CDN_PATH";
+        localDocument.getElementsByTagName(scriptText)[0].parentNode.appendChild(scriptElement);
+    });
 
     // capture initial cookie
     try {
         appInsights.cookie = localDocument.cookie;
-    } catch (e) {}
+    } catch (e) { }
 
     appInsights.queue = [];
-    appInsights.version = "1.0";
 
     function createLazyMethod(name) {
         // Define a temporary method that queues-up a the real method call
-        appInsights[name] = function() {
+        appInsights[name] = function () {
             // Capture the original arguments passed to the method
             var originalArguments = arguments;
             // Queue-up a call to the real method
-            appInsights.queue.push(function() {
+            appInsights.queue.push(function () {
                 // Invoke the real method with the captured original arguments
                 appInsights[name].apply(appInsights, originalArguments);
             });
@@ -59,7 +60,7 @@
         method = "onerror";
         createLazyMethod("_" + method);
         var originalOnError = localWindow[method];
-        localWindow[method] = function(message, url, lineNumber, columnNumber, error) {
+        localWindow[method] = function (message, url, lineNumber, columnNumber, error) {
             var handled = originalOnError && originalOnError(message, url, lineNumber, columnNumber, error);
             if (handled !== true) {
                 appInsights["_" + method](message, url, lineNumber, columnNumber, error);
@@ -76,4 +77,8 @@
 
 // global instance must be set in this order to mitigate issues in ie8 and lower
 window.appInsights = appInsights;
-appInsights.trackPageView();
+
+// if somebody calls the snippet twice, don't report page view again
+if (appInsights.queue && appInsights.queue.length === 0) {
+    appInsights.trackPageView();
+}

@@ -3,7 +3,7 @@ $jsSdkDir = Split-Path (Split-Path $MyInvocation.MyCommand.Path) -Parent;
 Write-Host "Releasing a vnext from $jsSdkDir";
 
 # check if the minified dir exists
-$jssdkMinDir = Join-Path $jssdkDir -ChildPath "JavaScript\JavaScriptSDK\min\";
+$jssdkMinDir = Join-Path $jssdkDir -ChildPath "bundle\";
 
 if (-Not (Test-Path $jssdkMinDir)) {
     Write-Warning "'$jssdkMinDir' directory doesn't exist. Compile JSSDK first.";
@@ -16,7 +16,9 @@ $releaseFromDir = Join-Path $jssdkMinDir -ChildPath "vnext";
 
 New-Item -ItemType directory -Path $releaseFromDir | Out-Null
 Copy-Item ($jssdkMinDir + "ai.js") (Join-Path $releaseFromDir -ChildPath "ai.vnext.js")
-Copy-Item ($jssdkMinDir + "ai.min.js") (Join-Path $releaseFromDir -ChildPath "ai.vnext.0.js")
+Copy-Item ($jssdkMinDir + "ai.js.map") (Join-Path $releaseFromDir -ChildPath "ai.js.map")
+Copy-Item ($jssdkMinDir + "ai.0.js") (Join-Path $releaseFromDir -ChildPath "ai.vnext.0.js")
+Copy-Item ($jssdkMinDir + "ai.0.js.map") (Join-Path $releaseFromDir -ChildPath "ai.0.js.map")
 
 Write-Host "Please review files in $releaseFromDir"
 Write-Host "Files will be uploaded to Azure storage! Press any key to continue..."

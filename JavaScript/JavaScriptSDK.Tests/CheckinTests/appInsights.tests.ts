@@ -1,5 +1,5 @@
-﻿/// <reference path="..\TestFramework\Common.ts" />
-/// <reference path="../../JavaScriptSDK/appInsights.ts" />
+﻿/// <reference path="../TestFramework/Common.ts" />
+/// <reference path="../../JavaScriptSDK/AppInsights.ts" />
 /// <reference path="../../JavaScriptSDK/Util.ts"/>
 
 class AppInsightsTests extends TestClass {
@@ -539,6 +539,21 @@ class AppInsightsTests extends TestClass {
         });
 
         this.testCase({
+            name: "AppInsightsTests: set authenticatedId does not set the cookie by default",
+            test: () => {
+                let appInsights = new Microsoft.ApplicationInsights.AppInsights(this.getAppInsightsSnippet());
+                let setAuthStub = this.sandbox.stub(appInsights.context.user, "setAuthenticatedUserContext");
+                
+                appInsights.setAuthenticatedUserContext("10001");
+
+                Assert.equal(true, setAuthStub.calledOnce);
+                Assert.equal(false, setAuthStub.calledWithExactly("10001", null, false));
+
+                setAuthStub.reset();
+            }
+        });      
+
+        this.testCase({
             name: "AppInsightsTests: trackPageView sends user-specified duration when passed",
             test: () => {
                 var snippet = this.getAppInsightsSnippet();
@@ -667,7 +682,12 @@ class AppInsightsTests extends TestClass {
 
                 // mock user agent
                 let originalUserAgent = navigator.userAgent;
-                this.setUserAgent("Googlebot/2.1");
+                try {
+                    this.setUserAgent("Googlebot/2.1");
+                } catch (ex) {
+                    Assert.ok(true, 'cannot run this test in the current setup - try Chrome');
+                    return;
+                }
 
                 // act
                 appInsights.trackPageView();
@@ -856,9 +876,15 @@ class AppInsightsTests extends TestClass {
 
                 var appInsights = new Microsoft.ApplicationInsights.AppInsights(snippet);
 
-                Assert.equal(false, appInsights.context._config.isBeaconApiDisabled(), "Beacon API enabled");
-                Assert.equal(false, appInsights.context._config.enableSessionStorageBuffer(), "Session storage disabled");
-                Assert.equal(65536, appInsights.context._config.maxBatchSizeInBytes(), "Max batch size overriden by Beacon API payload limitation");
+                if (Microsoft.ApplicationInsights.Util.IsBeaconApiSupported()) {
+                    Assert.equal(false, appInsights.context._config.isBeaconApiDisabled(), "Beacon API enabled");
+                    Assert.equal(false, appInsights.context._config.enableSessionStorageBuffer(), "Session storage disabled");
+                    Assert.equal(65536, appInsights.context._config.maxBatchSizeInBytes(), "Max batch size overriden by Beacon API payload limitation");
+                } else {
+                    Assert.equal(false, appInsights.context._config.isBeaconApiDisabled(), "Beacon API enabled");
+                    Assert.equal(true, appInsights.context._config.enableSessionStorageBuffer(), "Session storage disabled");
+                    Assert.equal(1000000, appInsights.context._config.maxBatchSizeInBytes(), "Max batch size overriden by Beacon API payload limitation");
+                }
             }
         });
 
@@ -866,7 +892,7 @@ class AppInsightsTests extends TestClass {
             name: "AppInsights._onerror creates a dump of unexpected error thrown by trackException for logging",
             test: () => {
                 var sut = new Microsoft.ApplicationInsights.AppInsights(this.getAppInsightsSnippet());
-                var dumpSpy = this.sandbox.spy(Microsoft.ApplicationInsights.Util, "dump")
+                var dumpSpy = this.sandbox.stub(Microsoft.ApplicationInsights.Util, "dump")
                 var unexpectedError = new Error();
                 var stub = this.sandbox.stub(sut, "trackException").throws(unexpectedError);
 
@@ -1710,6 +1736,41 @@ class AppInsightsTests extends TestClass {
                 Assert.equal(expectedRootId, (<any>xhr).requestHeaders['x-ms-request-root-id'], "x-ms-request-root-id id set correctly");
 
                 Assert.equal(expectedAjaxId, (<any>xhr).requestHeaders['x-ms-request-id'], "x-ms-request-id id set correctly");
+                Assert.equal(expectedAjaxId, trackStub.args[0][0], "ajax id passed to trackAjax correctly");
+            }
+        });
+
+        this.testCase({
+            name: "Ajax - root/parent id are not set for dependency calls with different port number",
+            test: () => {
+                var snippet = this.getAppInsightsSnippet();
+                snippet.disableAjaxTracking = false;
+                snippet.disableCorrelationHeaders = false;
+                snippet.maxBatchInterval = 0;
+                var appInsights = new Microsoft.ApplicationInsights.AppInsights(snippet);
+                var trackStub = this.sandbox.spy(appInsights, "trackDependency");
+                var expectedRootId = appInsights.context.operation.id;
+                Assert.ok(expectedRootId.length > 0, "root id was initialized to non empty string");
+
+                // override currentWindowHost
+                var sampleHost = "api.applicationinsights.io";
+                (<any>appInsights)._ajaxMonitor.currentWindowHost = sampleHost;
+
+                // Act
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "https://" + sampleHost + ":888/test");
+                xhr.send();
+
+                var expectedAjaxId = (<any>xhr).ajaxData.id;
+                Assert.ok(expectedAjaxId.length > 0, "ajax id was initialized");
+
+                // Emulate response                               
+                (<any>xhr).respond("200", {}, "");
+
+                // Assert
+                Assert.equal(undefined, (<any>xhr).requestHeaders['x-ms-request-root-id'], "x-ms-request-root-id is not set");
+                Assert.equal(undefined, (<any>xhr).requestHeaders['x-ms-request-id'], "x-ms-request-id id not set");
+
                 Assert.equal(expectedAjaxId, trackStub.args[0][0], "ajax id passed to trackAjax correctly");
             }
         });

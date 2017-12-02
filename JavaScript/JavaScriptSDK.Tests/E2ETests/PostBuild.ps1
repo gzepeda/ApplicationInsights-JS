@@ -35,7 +35,7 @@ $content | out-file "$($projectDir)\E2ETests\ai.js"
 $aiPath = "ai.js"
 
 # test the queue
-$queueTest = "var i = 100; while(i--){appInsights.queue.push(function() {window.queueTest('from the queue')})};"
+$queueTest = "var i = 100; while(i--){appInsights.queue && appInsights.queue.push(function() {window.queueTest('from the queue')})};"
 
 # copy snippet and convert protocol to file://
 $snippetLatest = gc "$($projectDir)\..\JavaScriptSDK\snippet.js"
@@ -67,27 +67,6 @@ $testSnippet = $testSnippet -replace "INSTRUMENTATION_KEY", $iKey
 $testSnippet = $testSnippet -replace "CDN_URL",$aiPath
 $testSnippet += $queueTest
 $testSnippet | out-file "$($projectDir)\E2ETests\testSnippet.js"
-
-# add snippet to error test files
-$instrumentation = gc "$($projectDir)\E2ETests\autoCollectionTemplates\instrumentation.js"
-$files = @("ajax.html", "errorDom.html", "errorScriptGlobal.html", "errorScriptNested.html", "errorScriptSyntax.html")
-foreach ($file in $files) {
-    $content = gc "$($projectDir)\E2ETests\autoCollectionTemplates\$($file)"
-
-    $strSnippet = ""
-    foreach ($line in $edgePrefix) {
-        $strSnippet += $line + "`r`n        "
-    }
-
-    $strInstrumentation = ""
-    foreach ($line in $instrumentation) {
-        $strInstrumentation += $line + "`r`n        "
-    }
-
-    $content = $content -replace 'PREFIX_PLACEHOLDER', $strSnippet 
-	$content = $content -replace 'INSTRUMENTATION_PLACEHOLDER', $strInstrumentation 
-    $content | out-file "$($projectDir)\E2ETests\$($file)"
-}
 
 # add snippet to performance test file
 $content = gc "$($projectDir)\Selenium\testPageNoAppInsights.html"

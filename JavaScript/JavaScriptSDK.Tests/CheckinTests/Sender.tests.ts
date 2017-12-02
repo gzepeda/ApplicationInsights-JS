@@ -1,9 +1,9 @@
-﻿/// <reference path="..\TestFramework\Common.ts" />
+﻿/// <reference path="../TestFramework/Common.ts" />
 /// <reference path="../../JavaScriptSDK/Util.ts"/>
-/// <reference path="../../JavaScriptSDK/sender.ts" />
+/// <reference path="../../JavaScriptSDK/Sender.ts" />
 /// <reference path="../../JavaScriptSDK/SendBuffer.ts"/>
-/// <reference path="../../javascriptsdk/appinsights.ts" />
-/// <reference path="../../JavaScriptSDK/util.ts" />
+/// <reference path="../../JavaScriptSDK/AppInsights.ts" />
+/// <reference path="../../JavaScriptSDK/Util.ts" />
 
 class SenderWrapper extends Microsoft.ApplicationInsights.Sender {
     errorSpy: SinonSpy;
@@ -76,13 +76,16 @@ class SenderTests extends TestClass {
         Assert.equal("POST", method, "requets method is 'POST'");
     };
 
-    private logAsserts(expectedCount) {
+    private logAsserts(expectedCount, expectedMessage?: string) {
         var isValidCallCount = this.loggingSpy.callCount === expectedCount;
         Assert.ok(isValidCallCount, "logging spy was called " + expectedCount + " time(s)");
         if (!isValidCallCount) {
             for (var i = 0; i < this.loggingSpy.args.length; i++) {
                 Assert.ok(false, "[warning thrown]: " + this.loggingSpy.args[i]);
             }
+        }
+        if (expectedMessage) {
+            Assert.ok(this.loggingSpy.args[0][0].indexOf(expectedMessage) !== -1);
         }
     }
 
@@ -159,7 +162,7 @@ class SenderTests extends TestClass {
 
                 // verify
                 this.requestAsserts();
-                this.fakeServer.requests.pop().respond(200, { "Content-Type": "application/json" }, '{"test":"success"}"');
+                this.fakeServer.requests.pop().respond(200, { "Content-Type": "application/json" }, '{"test":"success"}');
                 this.successAsserts(sender);
                 this.logAsserts(0);
                 sender.successSpy.reset();
@@ -172,9 +175,9 @@ class SenderTests extends TestClass {
 
                 // verify
                 this.requestAsserts();
-                this.fakeServer.requests.pop().respond(404, { "Content-Type": "application/json" }, '{"test":"not found"}"');
+                this.fakeServer.requests.pop().respond(404, { "Content-Type": "application/json" }, 'some_error');
                 this.errorAsserts(sender);
-                this.logAsserts(1);
+                this.logAsserts(1, "message:XMLHttpRequest,Status:404,Response:some_error");
                 sender.successSpy.reset();
                 sender.errorSpy.reset();
             }
@@ -191,7 +194,7 @@ class SenderTests extends TestClass {
                     return xhr;
                 });
 
-                XDomainRequest = <any>(() => {
+                window["XDomainRequest"] = <any>(() => {
                     var xdr = new this.xhr;
                     xdr.onload = xdr.onreadystatechange;
                     xdr.responseText = 200;
@@ -227,7 +230,7 @@ class SenderTests extends TestClass {
                 this.requestAsserts();
                 this.fakeServer.requests[0].respond(404, { "Content-Type": "application/json" }, '400');
                 this.errorAsserts(sender);
-                this.logAsserts(1);
+                this.logAsserts(1, "message:XDomainRequest,Response:400");
                 sender.successSpy.reset();
                 sender.errorSpy.reset();
             }
@@ -244,7 +247,7 @@ class SenderTests extends TestClass {
                     return xhr;
                 });
 
-                XDomainRequest = <any>(() => {
+                window["XDomainRequest"] = <any>(() => {
                     var xdr = new this.xhr;
                     xdr.onload = xdr.onreadystatechange;
                     xdr.responseText = 206;
@@ -295,7 +298,7 @@ class SenderTests extends TestClass {
                 // setup
                 var xdr = new this.xhr;
                 XMLHttpRequest = <any>(() => { });
-                XDomainRequest = <any>(() => {
+                window["XDomainRequest"] = <any>(() => {
                     xdr.onload = xdr.onreadystatechange;
                     xdr.responseText = 200;
                     return xdr;
@@ -835,7 +838,7 @@ class SenderTests extends TestClass {
                     return xhr;
                 });
 
-                XDomainRequest = <any>(() => {
+                window["XDomainRequest"] = <any>(() => {
                     var xdr = new this.xhr;
                     xdr.onload = xdr.onreadystatechange;
                     xdr.responseText = 206;
@@ -860,7 +863,7 @@ class SenderTests extends TestClass {
                     return xhr;
                 });
 
-                XDomainRequest = <any>(() => {
+                window["XDomainRequest"] = <any>(() => {
                     var xdr = new this.xhr;
                     xdr.onload = xdr.onreadystatechange;
                     xdr.responseText = 206;
@@ -1108,12 +1111,17 @@ class SenderTests extends TestClass {
         this.testCase({
             name: "SenderTests: send() is using BeaconAPI sender if the BeaconAPI is enabled",
             test: () => {
+                if (!navigator.sendBeacon) {
+                    navigator['sendBeacon'] = (url: string, data?: any) => { return true; };
+                }
+
                 // enable beacon API and mock sender
                 var config = this.getDefaultConfig();
                 config.isBeaconApiDisabled = () => false;
 
                 var sender = <SenderWrapper>new Microsoft.ApplicationInsights.Sender(config);
-                sender.beaconStub = this.sandbox.stub((<any>navigator), "sendBeacon");
+                sender.beaconStub = this.sandbox.stub((
+                    navigator), "sendBeacon");
 
                 Assert.ok(sender, "sender was constructed");
                 Assert.ok(Microsoft.ApplicationInsights.Util.IsBeaconApiSupported(), "Beacon API is supported");
@@ -1131,12 +1139,16 @@ class SenderTests extends TestClass {
         this.testCase({
             name: "SenderTests: send() is not using BeaconAPI sender if the BeaconAPI is disabled",
             test: () => {
+                if (!navigator.sendBeacon) {
+                    navigator['sendBeacon'] = (url: string, data?: any) => { return true; };
+                }
+
                 // enable beacon API and mock sender
                 var config = this.getDefaultConfig();
                 config.isBeaconApiDisabled = () => true;
 
                 var sender = <SenderWrapper>new Microsoft.ApplicationInsights.Sender(config);
-                sender.beaconStub = this.sandbox.stub((<any>navigator), "sendBeacon");
+                sender.beaconStub = this.sandbox.stub((navigator), "sendBeacon");
 
                 Assert.ok(sender, "sender was constructed");
                 Assert.ok(Microsoft.ApplicationInsights.Util.IsBeaconApiSupported(), "Beacon API is supported");

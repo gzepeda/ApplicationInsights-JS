@@ -1,4 +1,4 @@
-﻿/// <reference path="appinsights.ts" />
+﻿/// <reference path="AppInsights.ts" />
 
 module Microsoft.ApplicationInsights {
     "use strict";
@@ -6,7 +6,6 @@ module Microsoft.ApplicationInsights {
     export interface Snippet {
         queue: Array<() => void>;
         config: IConfig;
-        version: string;
     }
 
     export class Initialization {
@@ -167,12 +166,13 @@ module Microsoft.ApplicationInsights {
             config.maxAjaxCallsPerView = !isNaN(config.maxAjaxCallsPerView) ? config.maxAjaxCallsPerView : 500;
           
             config.isBeaconApiDisabled = Util.stringToBoolOrDefault(config.isBeaconApiDisabled, true);
-            config.disableCorrelationHeaders = Util.stringToBoolOrDefault(config.disableCorrelationHeaders, true);
+            config.disableCorrelationHeaders = Util.stringToBoolOrDefault(config.disableCorrelationHeaders);
             config.disableFlushOnBeforeUnload = Util.stringToBoolOrDefault(config.disableFlushOnBeforeUnload);
             config.enableSessionStorageBuffer = Util.stringToBoolOrDefault(config.enableSessionStorageBuffer, true);
             config.isRetryDisabled = Util.stringToBoolOrDefault(config.isRetryDisabled);
             config.isCookieUseDisabled = Util.stringToBoolOrDefault(config.isCookieUseDisabled);
             config.isStorageUseDisabled = Util.stringToBoolOrDefault(config.isStorageUseDisabled);
+            config.isBrowserLinkTrackingEnabled = Util.stringToBoolOrDefault(config.isBrowserLinkTrackingEnabled);
  
             return config;
         }

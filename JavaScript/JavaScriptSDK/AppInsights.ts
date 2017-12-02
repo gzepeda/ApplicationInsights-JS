@@ -1,4 +1,4 @@
-/// <reference path="telemetrycontext.ts" />
+/// <reference path="TelemetryContext.ts" />
 /// <reference path="./Telemetry/Common/Data.ts"/>
 /// <reference path="./Util.ts"/>
 /// <reference path="../JavaScriptSDK.Interfaces/Contracts/Generated/SessionState.ts"/>
@@ -13,8 +13,7 @@ module Microsoft.ApplicationInsights {
 
     "use strict";
 
-    export var Version = "1.0.8";
-    export var SnippetVersion: string;
+    export var Version = "1.0.14";
 
     /**
     * Internal interface to pass appInsights object to subcomponents without coupling 
@@ -41,6 +40,7 @@ module Microsoft.ApplicationInsights {
         private _pageTracking: Timing;
         private _pageViewManager: Microsoft.ApplicationInsights.Telemetry.PageViewManager;
         private _pageVisitTimeManager: Microsoft.ApplicationInsights.Telemetry.PageVisitTimeManager;
+        private _ajaxMonitor: Microsoft.ApplicationInsights.AjaxMonitor;
 
         public config: IConfig;
         public context: TelemetryContext;
@@ -84,7 +84,9 @@ module Microsoft.ApplicationInsights {
                     return ((this.config.isBeaconApiDisabled || !Util.IsBeaconApiSupported()) && this.config.enableSessionStorageBuffer);
                 },
                 isRetryDisabled: () => this.config.isRetryDisabled,
-                isBeaconApiDisabled: () => this.config.isBeaconApiDisabled
+                isBeaconApiDisabled: () => this.config.isBeaconApiDisabled,
+                sdkExtension: () => this.config.sdkExtension,
+                isBrowserLinkTrackingEnabled: () => this.config.isBrowserLinkTrackingEnabled
             }
 
             if (this.config.isCookieUseDisabled) {
@@ -127,7 +129,9 @@ module Microsoft.ApplicationInsights {
             this._pageVisitTimeManager = new ApplicationInsights.Telemetry.PageVisitTimeManager(
                 (pageName, pageUrl, pageVisitTime) => this.trackPageVisitTime(pageName, pageUrl, pageVisitTime));
 
-            if (!this.config.disableAjaxTracking) { new Microsoft.ApplicationInsights.AjaxMonitor(this); }
+            if (!this.config.disableAjaxTracking) {
+                this._ajaxMonitor = new Microsoft.ApplicationInsights.AjaxMonitor(this);
+            }
         }
 
         public sendPageViewInternal(name?: string, url?: string, duration?: number, properties?: Object, measurements?: Object) {
@@ -372,12 +376,13 @@ module Microsoft.ApplicationInsights {
 
         /**
         * Log a diagnostic message. 
-        * @param    message A message string 
+        * @param   message A message string 
         * @param   properties  map[string, string] - additional data used to filter traces in the portal. Defaults to empty.
+        * @param   severityLevel   AI.SeverityLevel - severity level
         */
-        public trackTrace(message: string, properties?: Object) {
+        public trackTrace(message: string, properties?: Object, severityLevel?: AI.SeverityLevel) {
             try {
-                var telemetry = new Telemetry.Trace(message, properties);
+                var telemetry = new Telemetry.Trace(message, properties, severityLevel);
                 var data = new ApplicationInsights.Telemetry.Common.Data<ApplicationInsights.Telemetry.Trace>(Telemetry.Trace.dataType, telemetry);
                 var envelope = new Telemetry.Common.Envelope(data, Telemetry.Trace.envelopeType);
 
@@ -402,10 +407,11 @@ module Microsoft.ApplicationInsights {
 
         /**
          * Immediately send all queued telemetry.
+         * @param {boolean} async - If flush should be call asynchronously
          */
-        public flush() {
+        public flush(async = true) {
             try {
-                this.context._sender.triggerSend();
+                this.context._sender.triggerSend(async);
             } catch (e) {
                 _InternalLogging.throwInternal(LoggingSeverity.CRITICAL,
                     _InternalMessageId.FlushFailed,
@@ -415,15 +421,19 @@ module Microsoft.ApplicationInsights {
         }
 
         /**
-         * Sets the autheticated user id and the account id in this session.
+         * Sets the authenticated user id and the account id.
          * User auth id and account id should be of type string. They should not contain commas, semi-colons, equal signs, spaces, or vertical-bars.
+         * 
+         * By default the method will only set the authUserID and accountId for all events in this page view. To add them to all events within
+         * the whole session, you should either call this method on every page view or set `storeInCookie = true`. 
          *   
          * @param authenticatedUserId {string} - The authenticated user id. A unique and persistent string that represents each authenticated user in the service.
          * @param accountId {string} - An optional string to represent the account associated with the authenticated user.
+         * @param storeInCookie {boolean} - AuthenticateUserID will be stored in a cookie and added to all events within this session. 
          */
-        public setAuthenticatedUserContext(authenticatedUserId: string, accountId?: string) {
+        public setAuthenticatedUserContext(authenticatedUserId: string, accountId?: string, storeInCookie = false) {
             try {
-                this.context.user.setAuthenticatedUserContext(authenticatedUserId, accountId);
+                this.context.user.setAuthenticatedUserContext(authenticatedUserId, accountId, storeInCookie);
             } catch (e) {
                 _InternalLogging.throwInternal(LoggingSeverity.WARNING,
                     _InternalMessageId.SetAuthContextFailed,
@@ -454,8 +464,9 @@ module Microsoft.ApplicationInsights {
         */
         private SendCORSException(properties: any) {
             var exceptionData = Microsoft.ApplicationInsights.Telemetry.Exception.CreateSimpleException(
-                "Script error.", "Error", "unknown", "unknown",
-                "The browser's same-origin policy prevents us from getting the details of this exception.The exception occurred in a script loaded from an origin different than the web page.For cross- domain error reporting you can use crossorigin attribute together with appropriate CORS HTTP headers.For more information please see http://www.w3.org/TR/cors/.",
+                "Script error.",
+                "Error", "unknown", "unknown",
+                "The browser's same-origin policy prevents us from getting the details of this exception. Consider using 'crossorigin' attribute.",
                 0, null);
             exceptionData.properties = properties;
 

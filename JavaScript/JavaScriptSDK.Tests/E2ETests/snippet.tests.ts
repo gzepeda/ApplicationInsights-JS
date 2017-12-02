@@ -1,10 +1,9 @@
-﻿/// <reference path="..\TestFramework\Common.ts" />
-/// <reference path="../../javascriptsdk/sender.ts" />
-/// <reference path="../../javascriptsdk/appinsights.ts" />
+﻿/// <reference path="../TestFramework/Common.ts" />
+/// <reference path="../../JavaScriptSDK/Sender.ts" />
+/// <reference path="../../JavaScriptSDK/AppInsights.ts" />
 
 class SnippetTests extends TestClass {
     private aiName = "appInsights";
-    private instrumentationKey = "3e6a441c-b52b-4f39-8944-f81dd6c2dc46";
     private originalAppInsights;
     private queueSpy;
 
@@ -13,9 +12,11 @@ class SnippetTests extends TestClass {
     private queueCallCount = 100;
     private senderMocks;
 
-    private loadSnippet(path) {
+    private loadSnippet(path, resetWindow = true) {
         // load ai via the snippet
-        window[this.aiName] = undefined;
+        if (resetWindow) {
+            window[this.aiName] = undefined;
+        }
         var key = "E2ETests";
         var snippetPath = window.location.href.split(key)[0] + key + path;
         var scriptElement = document.createElement("script");
@@ -92,7 +93,7 @@ class SnippetTests extends TestClass {
         });
 
         this.testCaseAsync({
-            name: "SnippetTests: SDK and Snippet versions are handled correctly",
+            name: "SnippetTests: SDK are handled correctly",
             stepDelay: 250,
             steps: [
                 () => {
@@ -111,12 +112,54 @@ class SnippetTests extends TestClass {
 
                     // check url and properties
                     var expectedSdk = "javascript:" + Microsoft.ApplicationInsights.Version;
-                    var expectedSnippet = "snippet:" + Microsoft.ApplicationInsights.SnippetVersion;
 
                     var data = <Microsoft.ApplicationInsights.Telemetry.Common.Envelope>this.senderMocks.sender.args[0][0];
-                    Assert.equal(expectedSnippet, data.tags["ai.internal.agentVersion"], "snippet version was set correctly");
                     Assert.equal(expectedSdk, data.tags["ai.internal.sdkVersion"], "sdk version was set correctly");
                 })
+        });
+
+        this.testCaseAsync({
+            name: "SnippetTests: SDK sends an Exception when an Error is thrown",
+            stepDelay: 250,
+            steps: [
+                () => {
+                    this.loadSnippet(snippet_Latest);
+                },
+                () => {
+                    this.senderMocks = this.setAppInsights();
+
+                    // we can't simply throw because it will fail the test
+                    // this will only validate that if the _onError is called it sends the Exception to AI
+                    window["appInsights"]._onerror("upps!");
+                }]
+                .concat(this.waitForResponse())
+                .concat(() => {
+                    Assert.equal(this.queueCallCount, this.queueSpy.callCount, "queue is emptied");
+                    Assert.equal(1, this.senderMocks.sender.callCount, "sender called");
+                    this.boilerPlateAsserts(this.senderMocks);
+
+                    var data = <Microsoft.ApplicationInsights.Telemetry.Common.Envelope>this.senderMocks.sender.args[0][0];
+                    Assert.ok(data.name.indexOf(".Exception") !== -1, "Exception event recorded");
+                    Assert.equal("upps!", (<any>data.data).baseData.exceptions[0].message, "error has correct message");
+                })
+        });
+
+        var trackPageSpy: SinonSpy;
+
+        this.testCaseAsync({
+            name: "SnippetTests: it's safe to initialize the snippet twice, but it should report only one pageView",
+            stepDelay: 250,
+            steps: [
+                () => {
+                    this.loadSnippet(snippet_Latest);
+                },
+                () => {
+                    trackPageSpy = this.sandbox.spy(window["appInsights"], "trackPageView");
+                    this.loadSnippet(snippet_Latest, false);
+                },
+                () => {
+                    Assert.equal(trackPageSpy.callCount, 0);
+                }]
         });
     }
 

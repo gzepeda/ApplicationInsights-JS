@@ -1,4 +1,4 @@
-﻿/// <reference path="./logging.ts" />
+﻿/// <reference path="./Logging.ts" />
 module Microsoft.ApplicationInsights {
 
     /**
@@ -412,7 +412,7 @@ module Microsoft.ApplicationInsights {
                 if (Date.prototype.toISOString) {
                     return date.toISOString();
                 } else {
-                    function pad(number) {
+                    const pad = function(number) {
                         var r = String(number);
                         if (r.length === 1) {
                             r = "0" + r;
@@ -470,7 +470,7 @@ module Microsoft.ApplicationInsights {
         * happens in a script from other domain (cross origin, CORS).		
         */
         public static isCrossOriginError(message: string, url: string, lineNumber: number, columnNumber: number, error: Error): boolean {
-            return (message === "Script error." || message === "Script error") && error === null;
+            return (message === "Script error." || message === "Script error") && !error;
         }
 
         /**
@@ -515,7 +515,7 @@ module Microsoft.ApplicationInsights {
             if (window.addEventListener) {
                 window.addEventListener(eventName, callback, false);
             } else if (window["attachEvent"]) { // For older browsers
-                window["attachEvent"].call(verbEventName, callback);
+                window["attachEvent"](verbEventName, callback);
             } else { // if all else fails
                 return false;
             }

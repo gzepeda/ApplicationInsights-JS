@@ -1,6 +1,6 @@
-﻿/// <reference path="../../testframework/common.ts" />
-/// <reference path="../../testframework/contracttesthelper.ts" />
-/// <reference path="../../../JavaScriptSDK/telemetry/pageviewperformance.ts" />
+﻿/// <reference path="../../TestFramework/Common.ts" />
+/// <reference path="../../TestFramework/ContractTestHelper.ts" />
+/// <reference path="../../../JavaScriptSDK/Telemetry/PageViewPerformance.ts" />
 
 class PageViewPerformanceTelemetryTests extends ContractTestHelper {
 
@@ -89,13 +89,14 @@ class PageViewPerformanceTelemetryTests extends ContractTestHelper {
             name: name + "PageViewPerformanceTelemetry measurements are correct",
             test: () => {
 
-                var timing = <PerformanceTiming>{};
-                timing.navigationStart = 1;
-                timing.connectEnd = 10;
-                timing.requestStart = 11;
-                timing.responseStart = 30;
-                timing.responseEnd = 42;
-                timing.loadEventEnd = 60;
+                var timing = {
+                    navigationStart: 1,
+                    connectEnd: 10,
+                    requestStart: 11,
+                    responseStart: 30,
+                    responseEnd: 42,
+                    loadEventEnd: 60,
+                };
 
                 var timingSpy = this.sandbox.stub(Microsoft.ApplicationInsights.Telemetry.PageViewPerformance, "getPerformanceTiming", () => {
                     return timing;
@@ -118,13 +119,14 @@ class PageViewPerformanceTelemetryTests extends ContractTestHelper {
             name: name + "PageViewPerformanceTelemetry detects when perf data is sent by the browser incorrectly and doesn't send it",
             test: () => {
 
-                var timing = <PerformanceTiming>{};
-                timing.navigationStart = 1;
-                timing.connectEnd = 40;
-                timing.requestStart = 11;
-                timing.responseStart = 30;
-                timing.responseEnd = 42;
-                timing.loadEventEnd = 60;
+                var timing = {
+                    navigationStart: 1,
+                    connectEnd: 40,
+                    requestStart: 11,
+                    responseStart: 30,
+                    responseEnd: 42,
+                    loadEventEnd: 60,
+                };
 
                 var timingSpy = this.sandbox.stub(Microsoft.ApplicationInsights.Telemetry.PageViewPerformance, "getPerformanceTiming", () => {
                     return timing;
@@ -150,19 +152,25 @@ class PageViewPerformanceTelemetryTests extends ContractTestHelper {
         });
 
         this.testCase({
-            name: name + "PageViewPerformanceTelemetry is not reporting duration if a request is comming from a Googlebot",
+            name: name + "PageViewPerformanceTelemetry is not reporting duration if a request is coming from a Googlebot",
             test: () => {
                 // mock user agent
                 let originalUserAgent = navigator.userAgent;
-                this.setUserAgent("Googlebot/2.1");
+                try {
+                    this.setUserAgent("Googlebot/2.1");
+                } catch (ex) {
+                    Assert.ok(true, 'cannot run this test in the current setup - try Chrome');
+                    return;
+                }
 
-                var timing = <PerformanceTiming>{};
-                timing.navigationStart = 1;
-                timing.connectEnd = 2;
-                timing.requestStart = 3;
-                timing.responseStart = 30;
-                timing.responseEnd = 42;
-                timing.loadEventEnd = 60;
+                var timing = {
+                    navigationStart: 1,
+                    connectEnd: 2,
+                    requestStart: 3,
+                    responseStart: 30,
+                    responseEnd: 42,
+                    loadEventEnd: 60,
+                };
 
                 var timingSpy = this.sandbox.stub(Microsoft.ApplicationInsights.Telemetry.PageViewPerformance, "getPerformanceTiming", () => {
                     return timing;
@@ -197,20 +205,21 @@ class PageViewPerformanceTelemetryTests extends ContractTestHelper {
                 // see comment PageViewPerformance constructor on how timing data is calculated
                 // here we set values, so each metric will be exactly 3600000 (1h).
                 let timingModifiers = [(timing) => timing.loadEventEnd = 3600001,
-                    (timing) => timing.connectEnd = 3600001,
-                    (timing) => timing.responseStart = 3600003,
-                    (timing) => timing.responseEnd = 3600030,
-                    (timing) => timing.loadEventEnd = 3600042];
+                (timing) => timing.connectEnd = 3600001,
+                (timing) => timing.responseStart = 3600003,
+                (timing) => timing.responseEnd = 3600030,
+                (timing) => timing.loadEventEnd = 3600042];
 
                 for (var i = 0; i < timingModifiers.length; i++) {
 
-                    var timing = <PerformanceTiming>{};
-                    timing.navigationStart = 1;
-                    timing.connectEnd = 2;
-                    timing.requestStart = 3;
-                    timing.responseStart = 30;
-                    timing.responseEnd = 42;
-                    timing.loadEventEnd = 60;
+                    var timing = {
+                        navigationStart: 1,
+                        connectEnd: 2,
+                        requestStart: 3,
+                        responseStart: 30,
+                        responseEnd: 42,
+                        loadEventEnd: 60,
+                    };
 
                     // change perf timing value
                     timingModifiers[i](timing);
@@ -246,6 +255,38 @@ class PageViewPerformanceTelemetryTests extends ContractTestHelper {
                 }
             }
         });
+
+        this.testCase({
+            name: name + "shouldCollectDuration() should detect all google bots",
+            test: () => {
+                try {
+                    this.setUserAgent('fake user agent');
+                } catch (ex) {
+                    Assert.ok(true, 'cannot run this test in the current setup - try Chrome');
+                    return;
+                }
+
+                let testCases = [
+                    // bots
+                    { string: 'Googlebot/2.1 (+http://www.google.com/bot.html)', shouldCollect: false },
+                    { string: 'Googlebot-Image/1.0', shouldCollect: false },
+                    { string: 'AdsBot-Google-Mobile-Apps', shouldCollect: false },
+                    { string: 'Mozilla/5.0 (Linux; Android 5.0; SM-G920A) AppleWebKit (KHTML, like Gecko) Chrome Mobile Safari (compatible; AdsBot-Google-Mobile; +http://www.google.com/mobile/adsbot.html)', shouldCollect: false },
+                    { string: 'APIs-Google (+https://developers.google.com/webmasters/APIs-Google.html)', shouldCollect: false },
+                    // browsers
+                    { string: 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36', shouldCollect: true },
+                    { string: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246', shouldCollect: true },
+                    { string: 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:40.0) Gecko/20100101 Firefox/40.1', shouldCollect: true },
+                ];
+
+                for (let i = 0; i < testCases.length; i++) {
+                    this.setUserAgent(testCases[i].string);
+                    let shouldCollect = Microsoft.ApplicationInsights.Telemetry.PageViewPerformance.shouldCollectDuration(10);
+                    Assert.equal(testCases[i].shouldCollect, shouldCollect);
+                }
+            }
+        });
+
     }
 }
 new PageViewPerformanceTelemetryTests().registerTests();

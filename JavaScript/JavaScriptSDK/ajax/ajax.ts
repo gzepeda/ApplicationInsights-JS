@@ -1,5 +1,5 @@
-﻿/// <reference path="../logging.ts" />
-/// <reference path="../util.ts" />
+﻿/// <reference path="../Logging.ts" />
+/// <reference path="../Util.ts" />
 /// <reference path="./ajaxUtils.ts" />
 /// <reference path="./ajaxRecord.ts" />
 
@@ -56,9 +56,20 @@ module Microsoft.ApplicationInsights {
         ///<summary>Determines whether ajax monitoring can be enabled on this document</summary>
         ///<returns>True if Ajax monitoring is supported on this page, otherwise false</returns>
         private supportsMonitoring(): boolean {
-            var result = false;
-            if (!extensions.IsNullOrUndefined(XMLHttpRequest)) {
-                result = true;
+            var result = true;
+            if (extensions.IsNullOrUndefined(XMLHttpRequest) ||
+                extensions.IsNullOrUndefined(XMLHttpRequest.prototype) ||
+                extensions.IsNullOrUndefined(XMLHttpRequest.prototype.open) ||
+                extensions.IsNullOrUndefined(XMLHttpRequest.prototype.send) ||
+                extensions.IsNullOrUndefined(XMLHttpRequest.prototype.abort)) {
+                result = false;
+            }
+
+            // disable in IE8 or older (https://www.w3schools.com/jsref/jsref_trim_string.asp)
+            try {
+                " a ".trim();
+            } catch (ex) {
+                result = false;
             }
 
             return result;
@@ -140,7 +151,7 @@ module Microsoft.ApplicationInsights {
         private sendHandler(xhr: XMLHttpRequestInstrumented, content) {
             xhr.ajaxData.requestSentTime = dateTime.Now();
 
-            // Add correlation headers only for requests within the same domain
+            // Add correlation headers only for requests within the same host and port number
             // For cross- origin requests we need to ensure that x- ms -* headers are present in `Access-Control-Allow-Headers` header (OPTIONS response)
             if (!this.appInsights.config.disableCorrelationHeaders && (UrlHelper.parseUrl(xhr.ajaxData.getAbsoluteUrl()).host == this.currentWindowHost)) {
                 var rootId = this.appInsights.context.operation.id;

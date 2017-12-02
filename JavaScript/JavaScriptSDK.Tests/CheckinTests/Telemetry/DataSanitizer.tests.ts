@@ -1,5 +1,5 @@
-﻿/// <reference path="../../testframework/common.ts" />
-/// <reference path="../../../JavaScriptSDK/telemetry/Common/DataSanitizer.ts" />
+﻿/// <reference path="../../TestFramework/Common.ts" />
+/// <reference path="../../../JavaScriptSDK/Telemetry/Common/DataSanitizer.ts" />
 /// <reference path="../../../JavaScriptSDK/Util.ts"/>
 
 class DataSanitizerTests extends TestClass {
